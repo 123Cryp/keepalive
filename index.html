@@ -611,10 +611,13 @@ function route() {
   document.querySelectorAll(".route").forEach((r) => r.classList.toggle("active", r.id === "route-" + key));
   document.querySelectorAll(".tab").forEach((a) => a.classList.toggle("active", a.dataset.tab === (key === "sla" ? "home" : key)));
   window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
+  setTimeout(() => window.scrollTo(0, 0), 120);
   if (key === "home") loadList(false); else if (key === "create") renderSummary();
   else if (key === "sla") showSla(decodeURIComponent(parts[1] || "")); else if (key === "watch") loadWatch();
   else { checkPending(); loadAcct(); }
 }
+try { history.scrollRestoration = "manual"; } catch (e) { /* ignore */ }
 window.addEventListener("hashchange", route);
 route();
 </script>
