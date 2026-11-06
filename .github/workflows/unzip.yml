@@ -2,6 +2,7 @@ name: Unzip upload
 
 on:
   push:
+    branches: [main]
     paths:
       - "*.zip"
   workflow_dispatch:
@@ -14,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Unzip every zip in the repository root
         run: |
@@ -36,4 +39,4 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           git add -A
           git diff --cached --quiet || git commit -m "Unzip upload"
-          git push
+          git push origin main
