@@ -1,0 +1,39 @@
+name: Unzip upload
+
+on:
+  push:
+    paths:
+      - "*.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip every zip in the repository root
+        run: |
+          set -e
+          shopt -s nullglob
+          for z in *.zip; do
+            tmp=$(mktemp -d)
+            unzip -q -o "$z" -d "$tmp"
+            entries=$(ls -A "$tmp" | wc -l)
+            only=$(ls -A "$tmp" | head -n 1)
+            if [ "$entries" = "1" ] && [ -d "$tmp/$only" ]; then src="$tmp/$only"; else src="$tmp"; fi
+            rm -rf "$src/.github"
+            cp -a "$src"/. .
+            git rm -q -f "$z"
+          done
+
+      - name: Commit the result
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Unzip upload"
+          git push
