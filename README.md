@@ -110,7 +110,7 @@ Deployed on GenLayer Studio (testnet build, short time constants).
 | Deployer | `0xBD767E...da35F6` |
 | Deploy transaction | `0x4878923d...e32e12fa` (finalized, accepted) |
 
-Live test results go in `TESTNET_TESTS.md`.
+Live test results (healthy and failing probes, settlement, cancel, resign, withdrawals, solvency) are in `TESTNET_TESTS.md`.
 
 ## License
 

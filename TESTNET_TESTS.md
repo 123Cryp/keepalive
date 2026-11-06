@@ -116,3 +116,23 @@ Same contract, same failing health URL, three more agreements.
 | `withdraw` with no balance | reverted |
 | `withdraw` by customer and watcher | 69 and 1 GEN |
 | `get_accounting` | balance 0, locked 0, owed 0, solvent true |
+
+## Phase B result (GenLayer Studio, 7 Nov 2026)
+
+Same contract, `sla_3`: `json` mode (`status=ok`) against `https://raw.githubusercontent.com/123Cryp/keepalive/main/demo/health.json`, two epochs of 600 s, two failed probes needed, minimum gap 30 s.
+
+| Path | Result |
+| --- | --- |
+| `get_binding_tag` | matched the tag served in `demo/health.json` |
+| Probe by the customer and by a watcher on the healthy file | `UP` twice, `up_count` 2 |
+| File edited to `"status": "down"`, probe by the watcher | `DOWN:field` |
+| Second probe 63 s later | outage proven, watcher recorded as finder, earlier `UP` probes kept in the statistics and did not cancel the evidence |
+| File still `down` when the customer probed in epoch 2 | one `DOWN:field`, no outage (a single failure is not an outage) |
+| File restored, probe in epoch 2 | `UP` |
+| `settle_due` after epoch 1 plus delay | epoch 1 `breach` |
+| `settle_due` after epoch 2 plus delay | `ended` |
+| `withdraw` by customer, provider, watcher | 19, 10 and 1 GEN |
+| `get_accounting` | balance 0, locked 0, owed 0, solvent true |
+| `get_stats` | total 4, ended 3, cancelled 1, live 0 |
+
+Not covered live: the status-feed exemption path, `semantic` mode and `terminate_for_cause`. They are covered offline only.
