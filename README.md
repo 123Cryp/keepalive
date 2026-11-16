@@ -110,7 +110,7 @@ Deployed on GenLayer Studio (testnet build, short time constants).
 | Deployer | `0xBD767E...da35F6` |
 | Previous contract (v1.0.0, live tests in `TESTNET_TESTS.md`) | `0xE1d5E6c6a1F35219889CDdC3B53ddE927C0AF94A` |
 
-Live test results (healthy and failing probes, settlement, cancel, resign, withdrawals, solvency) are in `TESTNET_TESTS.md`.
+Live test results are in `TESTNET_TESTS.md`: v1.0.0 (healthy and failing probes, settlement, cancel, resign, withdrawals, solvency) and v1.1.0 (profile, list and live-status views on a settled agreement).
 
 ## License
 

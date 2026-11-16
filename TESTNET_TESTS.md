@@ -136,3 +136,23 @@ Same contract, `sla_3`: `json` mode (`status=ok`) against `https://raw.githubuse
 | `get_stats` | total 4, ended 3, cancelled 1, live 0 |
 
 Not covered live: the status-feed exemption path, `semantic` mode and `terminate_for_cause`. They are covered offline only.
+
+## v1.1.0 result (GenLayer Studio, 16 Nov 2026)
+
+Contract `0x5d41F800e7d161F5a2e0d95584A789341703890D`, deployed from `0xBD767E1958928ff1CAaE1218dbCb4b2f2ada35F6`. Health URL `https://example.com/health.json` in `tag` mode, so every probe was a failure. Two epochs of 300 s, fee 10 GEN per epoch, bond 10 GEN, penalty 100% of one epoch's fee, 2 failed probes at least 30 s apart inside 120 s, one breach allowed.
+
+Wallets: customer `0xBD767E1958928ff1CAaE1218dbCb4b2f2ada35F6`, provider `0xaCd8005C272258a67A41A4e926398ABfFEc6dC9E`, watcher `0x99E48bA122EF86cC09315969fB09FF2e93c0A514`.
+
+| Path | Result |
+| --- | --- |
+| `create_sla` (20 GEN) and `accept_sla` (10 GEN bond) | `sla_0` active, contract balance 30 GEN |
+| `probe` less than 60 s after the start | reverted (ERROR), nothing recorded |
+| Two failed probes in epoch 1, two in epoch 2 | `down_count` 4, one proven outage per epoch, watcher recorded as finder |
+| `get_sla_status` during epoch 2 | `status` active, `current_epoch` 1, `settle_ready` false, `next_settle_in` counting down |
+| `settle_due` after both epochs plus the delay | both epochs `breach`, status `ended`, reason "all epochs settled" |
+| `get_profile` (provider) | `breached` 2, `clean` 0, `uptime_bps` 0, `penalties_paid` 10 GEN, `live` 0 |
+| `list_slas_for` (provider) | 1 agreement, status `ended` |
+| `withdraw` by customer and watcher | 29 GEN and 1 GEN, provider owed nothing |
+| Contract balance afterwards | 0 GEN |
+
+Expected split: epoch 1 pays the customer 19 GEN (10 fee + 10 penalty - 1 finder's fee) and the watcher 1 GEN; epoch 2 refunds 10 GEN because the bond is already spent.
