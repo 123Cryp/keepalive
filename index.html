@@ -43,8 +43,8 @@
   .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint);flex:none}
   .wallet.on .dot{background:var(--alive)}
   nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--paper);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-  nav.tabs .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 8px}
-  .tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:10px;text-decoration:none;color:var(--ink-faint);font-size:12px;font-weight:600}
+  nav.tabs .wrap{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:6px 4px}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;border-radius:10px;text-decoration:none;color:var(--ink-faint);font-size:12px;font-weight:600}
   .tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .tab.active{color:var(--pulse);background:var(--pulse-soft)}
   .route{display:none;padding:24px 0 30px}.route.active{display:block}
@@ -100,6 +100,8 @@
   .seg-tabs button{margin:0;padding:10px;background:var(--paper);color:var(--ink-dim);border:1px solid var(--line)}
   .seg-tabs button.sel{background:var(--pulse);color:#fff;border-color:var(--pulse)}
   .codebox{background:var(--fog);border:1px solid var(--line);border-radius:10px;padding:12px;font-family:var(--mono);font-size:12.5px;word-break:break-all;white-space:pre-wrap;user-select:all}
+  .meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:12px 0 4px}.meters div{background:var(--fog);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .meters b{display:block;font-family:var(--serif);font-size:22px;line-height:1.1}.meters span{font-size:12.5px;color:var(--ink-faint)}
   .back{display:inline-block;margin-bottom:12px;font-size:14px;text-decoration:none;font-weight:600}
   .empty{text-align:center;color:var(--ink-faint);padding:28px 8px}
   .bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--flat)}
@@ -220,6 +222,16 @@
     <button class="ghost" id="watchRefresh">Refresh</button>
   </section>
 
+  <section class="route" id="route-profile">
+    <h2>Track record</h2>
+    <p class="muted">What an address has delivered or paid for, counted from settled epochs only. Look up any wallet.</p>
+    <div class="card">
+      <label for="profAddr">Wallet address</label><input id="profAddr" placeholder="0x..." autocapitalize="off" autocomplete="off" spellcheck="false">
+      <div class="btnrow"><button id="profGo">Show record</button><button class="ghost" id="profMine">My wallet</button></div>
+    </div>
+    <div id="profView"></div>
+  </section>
+
   <section class="route" id="route-balance">
     <h2>Balance</h2>
     <p class="muted">Every payout is credited here first. Withdraw sends your whole balance to your own wallet.</p>
@@ -243,6 +255,7 @@
   <a class="tab" data-tab="home" href="#/"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Explore</a>
   <a class="tab" data-tab="create" href="#/create"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>New</a>
   <a class="tab" data-tab="watch" href="#/watch"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/></svg>Watch</a>
+  <a class="tab" data-tab="profile" href="#/profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Record</a>
   <a class="tab" data-tab="balance" href="#/balance"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Balance</a>
 </div></nav>
 
@@ -250,7 +263,7 @@
 import { createClient, createAccount } from "https://esm.sh/genlayer-js@latest";
 import { studionet } from "https://esm.sh/genlayer-js@latest/chains";
 
-const DEFAULT_CONTRACT_ADDRESS = "0xE1d5E6c6a1F35219889CDdC3B53ddE927C0AF94A";
+const DEFAULT_CONTRACT_ADDRESS = "0x5d41F800e7d161F5a2e0d95584A789341703890D";
 const LIST_LIMIT = 20;
 const $ = (id) => document.getElementById(id);
 
@@ -424,17 +437,18 @@ async function copy(text, btn) { try { await navigator.clipboard.writeText(text)
 /* ---------- Explore ---------- */
 let rows = [], total = 0;
 async function loadStats() { try { const s = await readJson("get_stats"); $("statTotal").textContent = s.total; $("statLive").textContent = s.live; $("statEnded").textContent = s.ended; } catch (e) {} }
+function slaCard(r) {
+  const live = Object.assign({ log: [], epochs: [] }, r);
+  return h("a", { class: "card", href: "#/sla/" + encodeURIComponent(r.sla_id) },
+    h("div", { class: "row" }, h("b", { text: r.service_name }), statusPill(r)),
+    pulseStrip(live, true),
+    h("div", { class: "faint", text: `${r.sla_id} - ${weiToGen(r.total_fee)} GEN over ${r.epochs_total} epochs of ${dur(r.epoch_seconds)} - ${r.breaches} breached` }));
+}
 function renderList() {
   const box = clear($("list")); const f = $("filterInput").value.trim().toLowerCase();
   const shown = rows.filter((r) => !f || [r.sla_id, r.service_name, r.customer, r.provider, r.status, r.health_url].join(" ").toLowerCase().includes(f));
   if (!shown.length) box.appendChild(h("div", { class: "empty", text: rows.length ? "Nothing matches this filter." : "No agreements yet. Create the first one." }));
-  for (const r of shown) {
-    const live = Object.assign({ log: [], epochs: [] }, r);
-    box.appendChild(h("a", { class: "card", href: "#/sla/" + encodeURIComponent(r.sla_id) },
-      h("div", { class: "row" }, h("b", { text: r.service_name }), statusPill(r)),
-      pulseStrip(live, true),
-      h("div", { class: "faint", text: `${r.sla_id} - ${weiToGen(r.total_fee)} GEN over ${r.epochs_total} epochs of ${dur(r.epoch_seconds)} - ${r.breaches} breached` })));
-  }
+  for (const r of shown) box.appendChild(slaCard(r));
   $("moreBtn").hidden = rows.length >= total;
 }
 async function loadList(append) {
@@ -514,6 +528,22 @@ async function showSla(id) {
     s.status === "active" ? h("p", { class: "hint", text: t < s.start_epoch ? `Starts in ${dur(s.start_epoch - t)}. The provider should publish the tag before then.` : t >= s.end_epoch ? "All epochs have run. Settle to pay out." : `Epoch ${Math.min(s.epochs_total, Math.floor((t - s.start_epoch) / s.epoch_seconds) + 1)} of ${s.epochs_total}. Ticks show the last ${s.log.length} probes: green worked, red failed.` }) : null,
     s.end_reason ? h("p", { class: "hint", text: "Ended: " + s.end_reason }) : null));
 
+  if (s.status === "active") {
+    let st = null; try { st = await readJson("get_sla_status", [id]); } catch (e) { st = null; }
+    if (current !== id) return;
+    if (st) {
+      const m = (b, l) => h("div", {}, h("b", { text: b }), h("span", { text: l }));
+      const phase = st.current_epoch !== null ? `Epoch ${st.current_epoch + 1} of ${s.epochs_total}` : (st.now_epoch < s.start_epoch ? "Warming up" : "Between epochs");
+      view.appendChild(h("div", { class: "card" }, h("h3", { text: "Live position" }),
+        h("div", { class: "meters" },
+          m(phase, st.current_epoch !== null ? `ends in ${dur(st.current_epoch_ends_in)}` : "no epoch running"),
+          m(st.settle_ready ? "Ready" : st.next_settle_in === null ? "-" : dur(st.next_settle_in), st.settle_ready ? "an epoch can be settled" : `until epoch ${(st.next_settle_epoch ?? 0) + 1} can settle`),
+          m(`${st.current_counted_downs} of ${s.outage_probes}`, "failed probes in window"),
+          m(`${st.breaches} of ${st.max_breaches}`, st.can_terminate ? "breaches: customer may terminate" : "breaches before termination")),
+        h("button", { class: "ghost", text: "Refresh position", onclick: refresh })));
+    }
+  }
+
   if (s.status === "open" || s.status === "active") {
     const need = s.outage_probes, have = s.down_times.length;
     view.appendChild(h("div", { class: "card" }, h("h3", { text: "Outage evidence" }),
@@ -559,18 +589,49 @@ async function showSla(id) {
       actionButton("Resign", "danger", (out) => { if (confirm("Resign from this agreement?")) return write(out, "resign", "resign", [id]).then((r) => r && refresh()); })));
   }
 
-  view.appendChild(h("div", { class: "card" }, h("h3", { text: "Epochs" }), h("table", {},
+  view.appendChild(h("div", { class: "card" }, h("h3", { text: "Epochs" }), h("div", { style: "overflow-x:auto" }, h("table", {},
     h("thead", {}, h("tr", {}, ["Epoch", "Ends", "Up", "Down", "Outages", "Result"].map((x) => h("th", { text: x })))),
     h("tbody", {}, s.epochs.map((e, i) => h("tr", {}, h("td", { text: i + 1 }), h("td", { text: s.start_epoch ? fmtTime(s.start_epoch + (i + 1) * s.epoch_seconds) : "-" }),
-      h("td", { text: e.ups }), h("td", { text: e.downs }), h("td", { text: e.outages }), h("td", { text: e.result + (e.exemption === "covered" ? " (incident)" : e.exemption === "denied" ? " (exemption denied)" : "") }))))) ));
+      h("td", { text: e.ups }), h("td", { text: e.downs }), h("td", { text: e.outages }), h("td", { text: e.result + (e.exemption === "covered" ? " (incident)" : e.exemption === "denied" ? " (exemption denied)" : "") })))))) ));
 
   view.appendChild(h("div", { class: "card" }, h("h3", { text: "Terms" }), kv([
-    ["Customer", s.customer], ["Provider", s.provider], ["Total fee", weiToGen(s.total_fee) + " GEN"], ["Bond", weiToGen(s.bond_amount) + " GEN (left " + weiToGen(s.bond_left) + ")"],
+    ["Customer", partyLink(s.customer)], ["Provider", partyLink(s.provider)], ["Total fee", weiToGen(s.total_fee) + " GEN"], ["Bond", weiToGen(s.bond_amount) + " GEN (left " + weiToGen(s.bond_left) + ")"],
     ["Penalty", (s.penalty_bps / 100) + "% of one epoch's fee"], ["Healthy means", s.check_mode === "tag" ? "the tag is served" : s.check_mode === "json" ? s.check_spec : s.check_spec + " (AI veto)"],
     ["Outage rule", `${s.outage_probes} failed probes, at least ${dur(s.min_gap_seconds)} apart, inside ${dur(s.window_seconds)}`],
     ["Termination", `after ${s.max_breaches} breached epochs`], ["Status feed", s.status_feed ? s.status_feed + (s.feed_component ? " / " + s.feed_component : "") : "none"],
     ["Probes", `${s.up_count} up, ${s.down_count} down`]])));
 }
+
+/* ---------- Track record ---------- */
+const partyLink = (a) => h("a", { href: "#/profile/" + a, text: a, style: "word-break:break-all" });
+async function loadProfile(addr) {
+  const view = clear($("profView")); $("profAddr").value = addr || "";
+  if (!addr) { view.appendChild(h("div", { class: "empty", text: "Enter a wallet address, or connect a wallet and tap My wallet." })); return; }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) { view.appendChild(h("div", { class: "empty", text: "That is not a wallet address. It starts with 0x and has 40 more characters." })); return; }
+  view.appendChild(h("div", { class: "empty" }, h("span", { class: "spin" }), "Loading..."));
+  let p, list;
+  try { p = await readJson("get_profile", [addr]); list = await readJson("list_slas_for", [addr, 0, 20]); }
+  catch (e) { clear(view).appendChild(h("div", { class: "empty", text: "Could not load: " + (e?.message || String(e)) })); return; }
+  if ($("profAddr").value !== addr) return; clear(view);
+  const pr = p.as_provider, cu = p.as_customer, m = (b, l) => h("div", {}, h("b", { text: b }), h("span", { text: l }));
+  const judged = pr.clean + pr.breached + pr.excused;
+  view.appendChild(h("div", { class: "card" }, h("h3", { text: "As provider" }),
+    pr.agreements ? h("div", {},
+      h("div", { class: "meters" }, m(pr.uptime_bps === null ? "-" : (pr.uptime_bps / 100).toFixed(1) + "%", "epochs delivered"), m(String(judged), "epochs judged"), m(String(pr.breached), "breached"), m(String(pr.agreements), `agreements (${pr.live} live)`)),
+      h("div", { class: "bar" }, h("i", { style: `width:${pr.uptime_bps === null ? 0 : pr.uptime_bps / 100}%;background:var(--alive)` })),
+      kv([["Earned", weiToGen(pr.fees_earned) + " GEN"], ["Penalties paid", weiToGen(pr.penalties_paid) + " GEN"], ["Excused by incident", String(pr.excused)], ["Refunded early", String(pr.refunded)]]))
+      : h("p", { class: "muted", text: "Has not served any agreement." })));
+  view.appendChild(h("div", { class: "card" }, h("h3", { text: "As customer" }),
+    cu.agreements ? kv([["Agreements", `${cu.agreements} (${cu.live} live)`], ["Paid to providers", weiToGen(cu.fees_paid) + " GEN"], ["Penalties received", weiToGen(cu.penalties_received) + " GEN"]])
+      : h("p", { class: "muted", text: "Has not bought any agreement." })));
+  view.appendChild(h("h3", { text: `Agreements (${list.total})`, style: "margin:16px 0 10px" }));
+  if (!list.slas.length) view.appendChild(h("div", { class: "empty", text: "No agreements yet." }));
+  for (const r of list.slas) view.appendChild(slaCard(r));
+  if (list.total > list.slas.length) view.appendChild(h("p", { class: "faint", text: `Showing the newest ${list.slas.length} of ${list.total}.` }));
+}
+$("profGo").addEventListener("click", () => { const a = $("profAddr").value.trim(); location.hash = "#/profile/" + a; });
+$("profMine").addEventListener("click", () => { if (!account) { openSheet(); return; } location.hash = "#/profile/" + account; });
+$("profAddr").addEventListener("keydown", (e) => { if (e.key === "Enter") $("profGo").click(); });
 
 /* ---------- Watch ---------- */
 async function loadWatch() {
@@ -607,7 +668,7 @@ $("acctBtn").addEventListener("click", loadAcct);
 function route() {
   const parts = (location.hash || "#/").replace(/^#\/?/, "").split("/");
   const name = parts[0] || "home";
-  const key = ["create", "sla", "watch", "balance"].includes(name) ? name : "home";
+  const key = ["create", "sla", "watch", "balance", "profile"].includes(name) ? name : "home";
   document.querySelectorAll(".route").forEach((r) => r.classList.toggle("active", r.id === "route-" + key));
   document.querySelectorAll(".tab").forEach((a) => a.classList.toggle("active", a.dataset.tab === (key === "sla" ? "home" : key)));
   window.scrollTo(0, 0);
@@ -615,6 +676,7 @@ function route() {
   setTimeout(() => window.scrollTo(0, 0), 120);
   if (key === "home") loadList(false); else if (key === "create") renderSummary();
   else if (key === "sla") showSla(decodeURIComponent(parts[1] || "")); else if (key === "watch") loadWatch();
+  else if (key === "profile") loadProfile(decodeURIComponent(parts[1] || "") || account || "");
   else { checkPending(); loadAcct(); }
 }
 try { history.scrollRestoration = "manual"; } catch (e) { /* ignore */ }

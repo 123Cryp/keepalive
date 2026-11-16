@@ -111,3 +111,14 @@ An agreement may declare a public Atlassian Statuspage feed (an allowlist of hos
 ## 11. Testing
 
 Offline tests run against a self-written SDK stub that reproduces the real SDK's habits: empty storage containers, range-checked `u256`, a JSON round trip of every consensus result, and storage rollback when a write method raises. A controllable clock replaces the contract's single clock function. The suite includes AST audits (every public write is classified by who may call it, only `withdraw` moves GEN out, no nondeterministic closure references `self`), an adversarial test for each rule in section 4, and a seeded random simulation that checks the solvency identity after every step and that the contract ends empty with every wei paid out exactly once. The whole suite runs against both `contract.py` and `contract_deploy.py`. The stub does not simulate real networks, real models or multi-validator consensus.
+
+
+## 9. Track record and live status (v1.1.0)
+
+Three read-only views were added. They never write and never touch the money paths, so the solvency identity is unchanged.
+
+- `list_slas_for(address, offset, limit)` lists, newest first, the agreements where the address is the customer or the provider. It reads a per-address index (`party_index`) that `create_sla` fills after validation, so a rejected creation is never indexed.
+- `get_profile(address)` returns a track record computed only from settled epochs: clean, breached, excused and refunded epochs, fees earned, penalties paid, penalties received and `uptime_bps` (clean plus excused over judged epochs, null before the first judged epoch). Refunded epochs are shown but never count against a provider's uptime. `penalties_received` is the gross penalty; the 10% finder tip is not subtracted.
+- `get_sla_status(sla_id)` returns the running epoch, seconds until it ends, seconds until the next settlement, whether settling is ready, failed probes still inside the window, and whether the customer may terminate for cause.
+
+Limit: `get_profile` reads every agreement of the address, so its cost grows with that address's agreement count.

@@ -36,6 +36,13 @@ class Frontend(unittest.TestCase):
                 given = 2
             self.assertEqual(given, len(methods[name]), name)
 
+    def test_track_record_page_uses_the_new_views(self):
+        for call in ('"get_profile", [addr]', '"list_slas_for", [addr, 0, 20]', '"get_sla_status", [id]'):
+            self.assertIn(call, HTML)
+        self.assertIn('id="route-profile"', HTML)
+        self.assertIn('data-tab="profile"', HTML)
+        self.assertIn('"#/profile/"', HTML)
+
     def test_exemption_call_passes_id_and_epoch(self):
         self.assertIn('"file_exemption", [id, parseInt(sel.value, 10)]', HTML)
         self.assertEqual(public_methods()["file_exemption"], ["sla_id", "epoch_index"])

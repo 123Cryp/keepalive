@@ -98,7 +98,7 @@ python3 tools/make_deploy.py --check
 
 Writes: `create_sla`, `accept_sla`, `cancel_sla`, `probe`, `file_exemption`, `settle_due`, `terminate_for_cause`, `resign`, `withdraw`.
 
-Views: `get_sla`, `list_slas`, `get_stats`, `total_slas`, `get_binding_tag`, `get_pending_withdrawal`, `get_contract_balance`, `get_accounting`.
+Views: `get_sla`, `list_slas`, `list_slas_for`, `get_profile`, `get_sla_status`, `get_stats`, `total_slas`, `get_binding_tag`, `get_pending_withdrawal`, `get_contract_balance`, `get_accounting`.
 
 ## Status
 
@@ -106,9 +106,9 @@ Deployed on GenLayer Studio (testnet build, short time constants).
 
 | Item | Value |
 | --- | --- |
-| Contract | `0xE1d5E6c6a1F35219889CDdC3B53ddE927C0AF94A` |
+| Contract (v1.1.0) | `0x5d41F800e7d161F5a2e0d95584A789341703890D` |
 | Deployer | `0xBD767E...da35F6` |
-| Deploy transaction | `0x4878923d...e32e12fa` (finalized, accepted) |
+| Previous contract (v1.0.0, live tests in `TESTNET_TESTS.md`) | `0xE1d5E6c6a1F35219889CDdC3B53ddE927C0AF94A` |
 
 Live test results (healthy and failing probes, settlement, cancel, resign, withdrawals, solvency) are in `TESTNET_TESTS.md`.
 

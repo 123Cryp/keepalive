@@ -326,6 +326,7 @@ class Keepalive(gl.Contract):
     cancelled_count: u256
     pending_withdrawals: TreeMap[str, u256]
     prober_last: TreeMap[str, u256]
+    party_index: TreeMap[str, str]
     locked_total: u256
     owed_total: u256
 
@@ -375,6 +376,16 @@ class Keepalive(gl.Contract):
             raise error
         self._credit(gl.message.sender_address, sent)
         return json.dumps({"rejected": str(error)[:300], "refunded_wei": str(sent)}, sort_keys=True)
+
+    def _index_party(self, key: str, sla_id: str) -> None:
+        ids = json.loads(self.party_index[key]) if key in self.party_index else []
+        ids.append(sla_id)
+        self.party_index[key] = json.dumps(ids)
+
+    def _party_slas(self, address) -> list:
+        key = self._address_key(address)
+        ids = json.loads(self.party_index[key]) if key in self.party_index else []
+        return [json.loads(self.slas[i]) for i in ids]
 
     def _load(self, sla_id: str) -> dict:
         if sla_id not in self.slas:
@@ -561,6 +572,9 @@ class Keepalive(gl.Contract):
         }
         self._lock(total)
         self._save(sla)
+        self._index_party(sla["customer_key"], sla_id)
+        if sla["provider_key"] != sla["customer_key"]:
+            self._index_party(sla["provider_key"], sla_id)
         return sla_id
 
     @gl.public.write.payable
@@ -885,6 +899,109 @@ class Keepalive(gl.Contract):
         cancelled = int(self.cancelled_count)
         return json.dumps(
             {"total": total, "ended": ended, "cancelled": cancelled, "live": total - ended - cancelled},
+            sort_keys=True,
+        )
+
+    @gl.public.view
+    def list_slas_for(self, address: str, offset: int, limit: int) -> str:
+        rows = self._party_slas(address)
+        total = len(rows)
+        start = max(0, int(offset))
+        count = max(1, min(int(limit), self.MAX_LIST_LIMIT))
+        picked = list(reversed(rows))[start:start + count]
+        return json.dumps(
+            {
+                "address": self._address_key(address),
+                "total": total,
+                "offset": start,
+                "limit": count,
+                "slas": [self._summary(r) for r in picked],
+            },
+            sort_keys=True,
+        )
+
+    @gl.public.view
+    def get_profile(self, address: str) -> str:
+        provider = {"agreements": 0, "live": 0, "clean": 0, "breached": 0, "excused": 0, "refunded": 0,
+                    "penalties_paid": 0, "fees_earned": 0}
+        customer = {"agreements": 0, "live": 0, "fees_paid": 0, "penalties_received": 0}
+        key = self._address_key(address)
+        for sla in self._party_slas(address):
+            live = 1 if sla["status"] in ("open", "active") else 0
+            fee = int(sla["fee_per_epoch"])
+            if sla["provider_key"] == key:
+                provider["agreements"] += 1
+                provider["live"] += live
+            if sla["customer_key"] == key:
+                customer["agreements"] += 1
+                customer["live"] += live
+            for rec in sla["epochs"]:
+                result = rec["result"]
+                penalty = int(rec.get("penalty", "0"))
+                if sla["provider_key"] == key:
+                    if result == "clean":
+                        provider["clean"] += 1
+                        provider["fees_earned"] += fee
+                    elif result == "breach":
+                        provider["breached"] += 1
+                        provider["penalties_paid"] += penalty
+                    elif result == "excused":
+                        provider["excused"] += 1
+                    elif result == "refunded":
+                        provider["refunded"] += 1
+                if sla["customer_key"] == key:
+                    if result == "clean":
+                        customer["fees_paid"] += fee
+                    if result == "breach":
+                        customer["penalties_received"] += penalty
+        judged = provider["clean"] + provider["breached"] + provider["excused"]
+        uptime = (provider["clean"] + provider["excused"]) * self.BPS_DENOMINATOR // judged if judged else None
+        for table in (provider, customer):
+            for name, value in list(table.items()):
+                if name in ("penalties_paid", "fees_earned", "fees_paid", "penalties_received"):
+                    table[name] = str(value)
+        provider["uptime_bps"] = uptime
+        return json.dumps(
+            {
+                "address": key,
+                "as_provider": provider,
+                "as_customer": customer,
+                "pending_withdrawal": self.get_pending_withdrawal(key),
+            },
+            sort_keys=True,
+        )
+
+    @gl.public.view
+    def get_sla_status(self, sla_id: str) -> str:
+        sla = self._load(sla_id)
+        now_s = _epoch_of(self._now_utc())
+        status = sla["status"]
+        current = None
+        ends_in = None
+        if status == "active" and sla["start_epoch"] <= now_s < sla["end_epoch"]:
+            current = (now_s - sla["start_epoch"]) // sla["epoch_seconds"]
+            ends_in = sla["start_epoch"] + (current + 1) * sla["epoch_seconds"] - now_s
+        next_index = sla["next_settle"]
+        settle_in = None
+        if status == "active" and next_index < sla["epochs_total"]:
+            due = sla["start_epoch"] + (next_index + 1) * sla["epoch_seconds"] + SETTLE_DELAY_SECONDS
+            settle_in = max(0, due - now_s)
+        return json.dumps(
+            {
+                "sla_id": sla_id,
+                "status": status,
+                "now_epoch": now_s,
+                "current_epoch": current,
+                "current_epoch_ends_in": ends_in,
+                "current_counted_downs": len([t for t in sla["down_times"] if now_s - t <= sla["window_seconds"]]) if current is not None else 0,
+                "next_settle_epoch": next_index if status == "active" else None,
+                "next_settle_in": settle_in,
+                "settle_ready": settle_in == 0 if settle_in is not None else False,
+                "can_terminate": status == "active" and sla["breaches"] >= sla["max_breaches"],
+                "breaches": sla["breaches"],
+                "max_breaches": sla["max_breaches"],
+                "bond_left": sla["bond_left"],
+            },
             sort_keys=True,
         )
 
